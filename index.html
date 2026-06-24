@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Escáner Pro - Modo Oscuro</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <!-- Librerías para Escáner y Excel -->
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+        #reader {
+            border: none !important;
+            border-radius: 1rem;
+            overflow: hidden;
+        }
+        #reader video {
+            object-fit: cover;
+            border-radius: 1rem;
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans antialiased min-h-screen flex flex-col justify-between pb-8">
+
+    <div class="max-w-md w-full mx-auto px-4 pt-6">
+        <!-- Encabezado Premium -->
+        <div class="bg-gradient-to-r from-slate-900 to-slate-800 rounded-2xl p-5 shadow-xl border border-slate-800 mb-5 flex items-center justify-between">
+            <div>
+                <h1 class="text-xl font-bold tracking-tight text-blue-400">Escáner Pro</h1>
+                <p class="text-xs text-slate-400 mt-0.5">Modo Oscuro Activo</p>
+            </div>
+            <div class="bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800 text-center">
+                <span id="contador" class="text-lg font-extrabold block leading-none text-blue-400">0</span>
+                <span class="text-[10px] uppercase font-semibold tracking-wider text-slate-500">Items</span>
+            </div>
+        </div>
+
+        <!-- Controles de Cámara Mejorados -->
+        <div class="bg-slate-900 p-4 rounded-2xl border border-slate-800 shadow-sm mb-5 space-y-3">
+            <button id="btnCamara" onclick="toggleCamara()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3.5 px-4 rounded-xl shadow-md transition-all duration-200 flex items-center justify-center gap-3 active:scale-[0.98] text-sm">
+                <span id="iconoCamara">📸</span>
+                <span id="textoCamara">Iniciar Cámara</span>
+            </button>
+
+            <!-- Selector de cámara (aparece si hay múltiples lentes traseros) -->
+            <div id="selectorCamaraContenedor" class="hidden">
+                <label for="selectCamara" class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Cambiar de Lente / Cámara:</label>
+                <select id="selectCamara" onchange="cambiarCamara(this.value)" class="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-xs font-medium text-slate-300 focus:outline-none focus:border-blue-500"></select>
+            </div>
+        </div>
+
+        <!-- Visor de la Cámara -->
+        <div id="reader-container" class="hidden mb-5 bg-black rounded-2xl overflow-hidden shadow-inner relative aspect-video border border-slate-800">
+            <div id="reader" class="w-full h-full"></div>
+        </div>
+
+        <!-- Entrada Manual -->
+        <div class="bg-slate-900 p-4 rounded-2xl shadow-sm border border-slate-800 mb-5">
+            <label for="codigoManual" class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Ingresar código manualmente</label>
+            <div class="relative flex items-center">
+                <input type="text" id="codigoManual" class="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 pl-4 pr-24 text-sm font-medium text-white focus:outline-none focus:border-blue-500 transition-all placeholder:text-slate-600" placeholder="Escribe el código...">
+                <button onclick="agregarManual()" class="absolute right-1.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs px-4 py-2 rounded-lg transition-colors active:scale-95">
+                    Agregar
+                </button>
+            </div>
+        </div>
+
+        <!-- Listado -->
+        <div class="bg-slate-900 rounded-2xl shadow-sm border border-slate-800 overflow-hidden">
+            <div class="px-4 py-3 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
+                <h3 class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Productos Registrados</h3>
+                <button onclick="limpiarTodo()" class="text-xs font-semibold text-rose-400 hover:text-rose-300 transition-colors">Vaciar lista</button>
+            </div>
+
+            <div id="listaContainer" class="divide-y divide-slate-800 max-h-[280px] overflow-y-auto bg-slate-950/40">
+                <!-- Estado vacío -->
+                <div id="estadoVacio" class="p-8 text-center text-slate-600">
+                    <span class="text-3xl block mb-2">📦</span>
+                    <p class="text-xs">No hay productos registrados</p>
+                </div>
+                <div id="listaProductos"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Acciones Inferiores Fijas -->
+    <div class="max-w-md w-full mx-auto px-4 mt-6">
+        <div class="grid grid-cols-2 gap-3">
+            <button onclick="exportarExcel()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3.5 px-4 rounded-xl shadow-md transition-colors flex items-center justify-center gap-2 active:scale-95 text-sm">
+                <span>📊</span> Excel
+            </button>
+            <button onclick="exportarPDF()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold py-3.5 px-4 rounded-xl shadow-md border border-slate-700 transition-colors flex items-center justify-center gap-2 active:scale-95 text-sm">
+                <span>📄</span> PDF / Imprimir
+            </button>
+        </div>
+    </div>
+
+<script>
+    let productos = [];
+    let html5QrCode = null;
+    let camarasDisponibles = [];
+    let camaraActualId = null;
+
+    function agregarManual() {
+        const input = document.getElementById('codigoManual');
+        const codigo = input.value.trim();
+        if (codigo) {
+            agregarProducto(codigo);
+            input.value = '';
+            input.focus();
+        }
+    }
+
+    function agregarProducto(codigo) {
+        const ahora = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        productos.unshift({ codigo: codigo, fecha: ahora });
+        actualizarInterfaz();
+
+        try {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioCtx.createOscillator();
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(850, audioCtx.currentTime);
+            oscillator.connect(audioCtx.destination);
+            oscillator.start();
+            oscillator.stop(audioCtx.currentTime + 0.05);
+        } catch(e) {}
+    }
+
+    function eliminarProducto(index) {
+        productos.splice(index, 1);
+        actualizarInterfaz();
+    }
+
+    function limpiarTodo() {
+        if(productos.length === 0) return;
+        if(confirm("¿Deseas vaciar la lista por completo?")) {
+            productos = [];
+            actualizarInterfaz();
+        }
+    }
+
+    function actualizarInterfaz() {
+        const container = document.getElementById('listaProductos');
+        const estadoVacio = document.getElementById('estadoVacio');
+        document.getElementById('contador').innerText = productos.length;
+
+        if (productos.length === 0) {
+            estadoVacio.classList.remove('hidden');
+            container.innerHTML = '';
+            return;
+        }
+
+        estadoVacio.classList.add('hidden');
+        container.innerHTML = '';
+
+        productos.forEach((p, index) => {
+            container.innerHTML += `
+                <div class="p-4 flex items-center justify-between hover:bg-slate-900/50 transition-colors border-b border-slate-900">
+                    <div class="flex flex-col gap-0.5">
+                        <span class="font-mono font-bold text-white text-sm tracking-tight break-all">${p.codigo}</span>
+                        <span class="text-[11px] font-medium text-slate-500 flex items-center gap-1">🕒 ${p.fecha}</span>
+                    </div>
+                    <button onclick="eliminarProducto(${index})" class="w-8 h-8 rounded-full hover:bg-rose-950/50 text-slate-500 hover:text-rose-400 flex items-center justify-center transition-colors">
+                        ✕
+                    </button>
+                </div>
+            `;
+        });
+    }
+
+    function toggleCamara() {
+        if (!html5QrCode) {
+            Html5Qrcode.getCameras().then(devices => {
+                if (devices && devices.length > 0) {
+                    camarasDisponibles = devices;
+                    let trasera = devices.find(device => device.label.toLowerCase().includes('back') || device.label.toLowerCase().includes('trasera') || device.label.toLowerCase().includes('environment'));
+                    camaraActualId = trasera ? trasera.id : devices[0].id;
+
+                    if(devices.length > 1) {
+                        const select = document.getElementById('selectCamara');
+                        select.innerHTML = '';
+                        devices.forEach(device => {
+                            const opt = document.createElement('option');
+                            opt.value = device.id;
+                            opt.innerText = device.label || `Cámara ${select.childElementCount + 1}`;
+                            if(device.id === camaraActualId) opt.selected = true;
+                            select.appendChild(opt);
+                        });
+                        document.getElementById('selectorCamaraContenedor').classList.remove('hidden');
+                    }
+
+                    encenderCamaraMecanismo(camaraActualId);
+                } else {
+                    alert("No se detectaron cámaras en este dispositivo.");
+                }
+            }).catch(err => {
+                alert("Error de permisos o contexto no seguro:\n" + err);
+            });
+        } else {
+            apagarCamaraUI();
+        }
+    }
+
+    function encenderCamaraMecanismo(id) {
+        const container = document.getElementById('reader-container');
+        const btn = document.getElementById('btnCamara');
+        const icono = document.getElementById('iconoCamara');
+        const texto = document.getElementById('textoCamara');
+
+        container.classList.remove('hidden');
+        texto.innerText = 'Detener Cámara';
+        icono.innerText = '🛑';
+        btn.classList.replace('bg-blue-600', 'bg-rose-600');
+        btn.classList.replace('hover:bg-blue-500', 'hover:bg-rose-500');
+
+        if(html5QrCode) {
+            html5QrCode.stop().then(() => { t() }).catch(() => { t() });
+        } else {
+            t();
+        }
+
+        function t() {
+            html5QrCode = new Html5Qrcode("reader");
+            html5QrCode.start(
+                id, 
+                {
+                    fps: 20,
+                    qrbox: function(width, height) {
+                        return { width: Math.floor(width * 0.85), height: Math.floor(height * 0.45) };
+                    }
+                },
+                (decodedText) => {
+                    agregarProducto(decodedText);
+                    html5QrCode.pause(true);
+                    setTimeout(() => html5QrCode.resume(), 1500);
+                },
+                (errorMessage) => {}
+            ).catch(err => {
+                alert("Error al iniciar el lente seleccionado: " + err);
+                apagarCamaraUI();
+            });
+        }
+    }
+
+    function cambiarCamara(nuevoId) {
+        if(html5QrCode) {
+            camaraActualId = nuevoId;
+            encenderCamaraMecanismo(nuevoId);
+        }
+    }
+
+    function apagarCamaraUI() {
+        const container = document.getElementById('reader-container');
+        const btn = document.getElementById('btnCamara');
+        const icono = document.getElementById('iconoCamara');
+        const texto = document.getElementById('textoCamara');
+
+        container.classList.add('hidden');
+        document.getElementById('selectorCamaraContenedor').classList.add('hidden');
+        texto.innerText = 'Iniciar Cámara';
+        icono.innerText = '📸';
+        btn.classList.replace('bg-rose-600', 'bg-blue-600');
+        btn.classList.replace('hover:bg-rose-500', 'hover:bg-blue-500');
+
+        if(html5QrCode) {
+            html5QrCode.stop().then(() => { html5QrCode = null; }).catch(() => { html5QrCode = null; });
+        }
+    }
+
+    // Corregido el orden para que en el Excel exporte del más viejo al más nuevo (orden cronológico real)
+    function exportarExcel() {
+        if(productos.length === 0) return alert("No hay datos para exportar");
+        const datos = [...productos].reverse().map((p, i) => ({"N°": i + 1, "Código de Producto": p.codigo, "Hora de Registro": p.fecha}));
+        const ws = XLSX.utils.json_to_sheet(datos);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Inventario");
+        XLSX.writeFile(wb, `Inventario_${new Date().toISOString().slice(0,10)}.xlsx`);
+    }
+
+    function exportarPDF() {
+        if(productos.length === 0) return alert("No hay datos para guardar");
+        window.print();
+    }
+</script>
+
+</body>
+  </html>
